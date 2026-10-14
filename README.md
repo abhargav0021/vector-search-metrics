@@ -5,6 +5,8 @@ databases and semantic search: **Euclidean**, **Cosine**, and **Dot Product**.
 
 **[▶ Open the live demo](https://abhargav0021.github.io/vector-search-metrics/)**
 
+![The demo: searching in plain language, then watching Euclidean, Cosine and Dot Product each pick a different #1](vector-search-demo.gif)
+
 ---
 
 ## What it shows
