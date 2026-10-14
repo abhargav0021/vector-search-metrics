@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Vector Search Metrics: How AI Finds Similar Things</title>
+<meta name="description" content="An interactive visualization of how vector databases decide what is 'similar' — Euclidean vs Cosine vs Dot Product, with the math computed live as you drag the query vector." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Vector Search Metrics: How AI Finds Similar Things" />
+<meta property="og:description" content="Drag a query vector around an embedding plane and watch Euclidean, Cosine and Dot Product each pick a different #1 — with the formula substituted live." />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#07090f;
+    --bg-2:#0c1018;
+    --panel:#11161f;
+    --panel-2:#151b26;
+    --line:#222b3a;
+    --line-soft:#1a2130;
+    --text:#e8edf6;
+    --text-dim:#93a1b8;
+    --text-faint:#64748b;
+    --query:#ff6b2c;
+    --c-lang:#60a5fa;
+    --c-ml:#c084fc;
+    --c-front:#4ade80;
+    --c-infra:#fbbf24;
+    --c-data:#2dd4bf;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1100px 600px at 12% -10%, rgba(255,107,44,.09), transparent 60%),
+      radial-gradient(900px 600px at 88% 0%, rgba(96,165,250,.10), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .wrap{max-width:1320px;margin:0 auto;padding:28px 20px 48px;}
+
+  /* ---------- header ---------- */
+  header{margin-bottom:22px;}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--text-faint);font-weight:600;
+    border:1px solid var(--line);border-radius:999px;
+    padding:5px 11px;background:rgba(255,255,255,.02);
+  }
+  .eyebrow .pulse{width:6px;height:6px;border-radius:50%;background:var(--query);box-shadow:0 0 0 0 rgba(255,107,44,.6);animation:pulse 2.4s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,107,44,.5)}70%{box-shadow:0 0 0 8px rgba(255,107,44,0)}100%{box-shadow:0 0 0 0 rgba(255,107,44,0)}}
+  h1{
+    font-size:clamp(23px,3.6vw,38px);
+    line-height:1.12;margin:14px 0 8px;font-weight:700;letter-spacing:-.02em;
+  }
+  h1 .grad{
+    background:linear-gradient(95deg,#ff8a4c,#ffd166 45%,#60a5fa);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{color:var(--text-dim);font-size:14.5px;max-width:62ch;line-height:1.55;margin:0;}
+  .sub kbd{
+    font-family:"JetBrains Mono",monospace;font-size:12px;
+    background:rgba(255,107,44,.12);border:1px solid rgba(255,107,44,.3);
+    color:#ffb183;padding:1px 6px;border-radius:5px;
+  }
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start;}
+  .col{display:flex;flex-direction:column;gap:18px;min-width:0;}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--bg-2));
+    border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:0 18px 40px -28px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.025);
+  }
+  .card-head{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:13px 16px;border-bottom:1px solid var(--line-soft);
+  }
+  .card-title{font-size:12px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--text-dim);}
+  .card-body{padding:16px;}
+
+  /* ---------- metric toggle ---------- */
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 16px 0;}
+  .mbtn{
+    position:relative;appearance:none;cursor:pointer;text-align:left;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-radius:11px;padding:11px 12px;color:var(--text-dim);
+    font-family:inherit;transition:border-color .18s,background .18s,transform .12s,color .18s;
+  }
+  .mbtn:hover{border-color:#30405a;color:var(--text);transform:translateY(-1px);}
+  .mbtn .mname{display:block;font-size:13.5px;font-weight:600;letter-spacing:-.01em;}
+  .mbtn .mform{display:block;font-family:"JetBrains Mono",monospace;font-size:10.5px;margin-top:4px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mbtn[aria-pressed="true"]{
+    background:linear-gradient(180deg,rgba(255,107,44,.17),rgba(255,107,44,.05));
+    border-color:rgba(255,107,44,.55);color:#fff;
+    box-shadow:0 0 0 1px rgba(255,107,44,.18), 0 10px 26px -18px rgba(255,107,44,.9);
+  }
+  .mbtn[aria-pressed="true"] .mform{color:#ffb183;}
+
+  /* ---------- search ---------- */
+  .search{padding:14px 16px 2px;}
+  .search-box{
+    display:flex;align-items:center;gap:9px;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-radius:11px;padding:0 11px;
+    transition:border-color .18s, box-shadow .18s;
+  }
+  .search-box:focus-within{
+    border-color:rgba(255,107,44,.6);
+    box-shadow:0 0 0 3px rgba(255,107,44,.09);
+  }
+  .search-box svg{flex:none;opacity:.5;}
+  .search-box input{
+    flex:1;min-width:0;background:none;border:none;outline:none;
+    color:var(--text);font-family:inherit;font-size:14px;padding:11px 0;
+  }
+  .search-box input::placeholder{color:#55617a;}
+  .sclear{
+    appearance:none;background:none;border:none;cursor:pointer;
+    color:var(--text-faint);font-size:15px;line-height:1;padding:4px 2px;
+    opacity:0;pointer-events:none;transition:opacity .15s,color .15s;
+  }
+  .sclear:hover{color:var(--text);}
+  .sclear.on{opacity:1;pointer-events:auto;}
+  .examples{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px;}
+  .examples .tag{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--text-faint);font-weight:600;}
+  .ex{
+    appearance:none;cursor:pointer;font-family:inherit;font-size:11.5px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);
+    color:var(--text-dim);border-radius:7px;padding:3.5px 9px;
+    transition:border-color .15s,color .15s,background .15s;
+  }
+  .ex:hover{border-color:rgba(255,107,44,.5);color:#ffc29b;background:rgba(255,107,44,.08);}
+  .embed-note{
+    margin-top:9px;font-family:"JetBrains Mono",monospace;font-size:11px;
+    color:var(--text-faint);line-height:1.6;min-height:17px;
+  }
+  .embed-note b{color:#ffb183;font-weight:500;}
+  .embed-note .miss{color:#f87171;}
+  .embed-note .term{
+    display:inline-block;background:rgba(96,165,250,.11);border:1px solid rgba(96,165,250,.28);
+    color:#9ec5fe;border-radius:5px;padding:0 5px;margin:0 2px;
+  }
+
+  /* ---------- plot ---------- */
+  .plot-shell{padding:6px 10px 12px;}
+  svg.plot{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;user-select:none;}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 8px;padding:0 16px 15px;align-items:center;}
+  .lg{
+    display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-dim);
+    background:none;border:1px solid transparent;border-radius:999px;padding:3px 9px 3px 7px;
+    font-family:inherit;
+  }
+  button.lg{cursor:pointer;transition:background .15s,border-color .15s,color .15s,opacity .15s;}
+  button.lg:hover{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--text);}
+  button.lg[aria-pressed="false"]{opacity:.38;}
+  button.lg[aria-pressed="false"] i{box-shadow:inset 0 0 0 2px currentColor;background:transparent!important;}
+  .lg i{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none;}
+  .legend .hint{font-size:10.5px;color:var(--text-faint);margin-left:auto;}
+  .readout{
+    font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--text-faint);
+    display:flex;gap:14px;flex-wrap:wrap;
+  }
+  .readout b{color:#ffb183;font-weight:500;}
+
+  /* ---------- results ---------- */
+  .rank-list{position:relative;display:flex;flex-direction:column;gap:5px;}
+  .row{
+    display:grid;grid-template-columns:26px 1fr auto;align-items:center;gap:10px;
+    padding:8px 10px;border-radius:10px;
+    background:var(--panel-2);border:1px solid var(--line-soft);
+    will-change:transform;
+  }
+  .row.top{
+    background:linear-gradient(90deg,rgba(255,107,44,.15),rgba(255,107,44,.03));
+    border-color:rgba(255,107,44,.42);
+  }
+  .rank{
+    font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;
+    color:var(--text-faint);text-align:center;
+  }
+  .row.top .rank{color:var(--query);}
+  .name{display:flex;align-items:center;gap:8px;min-width:0;}
+  .name i{width:7px;height:7px;border-radius:50%;flex:none;}
+  .name span{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .score{font-family:"JetBrains Mono",monospace;font-size:12.5px;color:var(--text);min-width:58px;text-align:right;}
+  .bar{grid-column:1 / -1;height:3px;border-radius:3px;background:rgba(255,255,255,.055);overflow:hidden;margin-top:1px;}
+  .bar>i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#ff6b2c,#ffd166);transition:width .25s ease;}
+  .row:not(.top) .bar>i{background:#36455c;}
+
+  /* ---------- math ---------- */
+  .math{
+    font-family:"JetBrains Mono",monospace;font-size:12.5px;line-height:1.95;
+    background:#090c13;border:1px solid var(--line-soft);border-radius:11px;
+    padding:13px 14px;overflow-x:auto;white-space:pre;
+  }
+  .math .lbl{color:var(--text-faint);}
+  .math .num{color:#7dd3fc;}
+  .math .q{color:#ffb183;}
+  .math .op{color:#64748b;}
+  .math .res{color:#4ade80;font-weight:700;}
+  .math .form{color:#e8edf6;font-weight:700;}
+  .target{
+    display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);
+    margin-bottom:11px;flex-wrap:wrap;
+  }
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    background:rgba(255,107,44,.12);border:1px solid rgba(255,107,44,.34);
+    color:#ffc29b;border-radius:999px;padding:3px 10px;font-weight:600;font-size:12px;
+  }
+
+  /* ---------- info ---------- */
+  .info-when{font-size:13.5px;line-height:1.6;color:var(--text);margin:0 0 10px;}
+  .info-when b{color:#ffc29b;}
+  .usedby{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding-top:11px;border-top:1px dashed var(--line);
+  }
+  .usedby .tag{
+    font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint);font-weight:600;
+  }
+  .usedby .pill{
+    font-size:11.5px;background:rgba(255,255,255,.045);border:1px solid var(--line);
+    color:var(--text-dim);border-radius:7px;padding:3px 8px;
+    font-family:"JetBrains Mono",monospace;
+  }
+  .note{
+    margin-top:12px;font-size:12px;color:var(--text-faint);line-height:1.6;
+    background:rgba(96,165,250,.06);border-left:2px solid rgba(96,165,250,.5);
+    padding:9px 11px;border-radius:0 8px 8px 0;
+  }
+  footer{
+    margin-top:26px;padding-top:16px;border-top:1px solid var(--line-soft);
+    display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    font-size:11.5px;color:var(--text-faint);
+  }
+  footer code{font-family:"JetBrains Mono",monospace;color:var(--text-dim);}
+
+  @media (max-width:980px){
+    .grid{grid-template-columns:minmax(0,1fr);}
+  }
+  @media (max-width:620px){
+    .wrap{padding:18px 13px 36px;}
+    .metrics{gap:6px;}
+    .mbtn{padding:9px 8px;text-align:center;}
+    .mbtn .mname{font-size:12.5px;}
+    .mbtn .mform{display:none;}
+    .math{font-size:10.5px;}
+    .card-body{padding:13px;}
+    .plot-shell{padding:4px 2px 10px;}
+    /* SVG text scales with the viewBox — bump it back up on small screens */
+    .plot .sl{font-size:17px;}
+    .plot .ql{font-size:17px;}
+    .plot .ax{font-size:15px;}
+    .readout{font-size:10.5px;gap:10px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="pulse"></span>Vector Search Metrics</div>
+    <h1>How vector databases find <span class="grad">&ldquo;similar&rdquo;</span></h1>
+    <p class="sub">Every skill below is a point in embedding space. Drag the orange <kbd>query</kbd> vector &mdash; or tap anywhere on the plane &mdash; and watch the ranking change. Same data, three distance metrics, three different answers.</p>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="col">
+      <section class="card">
+        <div class="metrics" role="group" aria-label="Distance metric">
+          <button class="mbtn" data-metric="euclidean" aria-pressed="false">
+            <span class="mname">Euclidean</span>
+            <span class="mform">√(Δ₁² + Δ₂²)</span>
+          </button>
+          <button class="mbtn" data-metric="cosine" aria-pressed="true">
+            <span class="mname">Cosine</span>
+            <span class="mform">q·p / (‖q‖‖p‖)</span>
+          </button>
+          <button class="mbtn" data-metric="dot" aria-pressed="false">
+            <span class="mname">Dot Product</span>
+            <span class="mform">q₁p₁ + q₂p₂</span>
+          </button>
+        </div>
+        <div class="search">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path>
+            </svg>
+            <input id="searchInput" type="search" autocomplete="off" spellcheck="false"
+                   placeholder="Search in plain language — e.g. “deep learning”, “container orchestration”"
+                   aria-label="Search query — text is embedded into a vector" />
+            <button class="sclear" id="searchClear" type="button" aria-label="Clear search">&times;</button>
+          </div>
+          <div class="examples">
+            <span class="tag">Try</span>
+            <button class="ex" data-q="deep learning">deep learning</button>
+            <button class="ex" data-q="container orchestration">container orchestration</button>
+            <button class="ex" data-q="web ui components">web ui components</button>
+            <button class="ex" data-q="semantic search database">semantic search database</button>
+            <button class="ex" data-q="systems programming">systems programming</button>
+          </div>
+          <div class="embed-note" id="embedNote"></div>
+        </div>
+        <div class="plot-shell">
+          <svg class="plot" id="plot" viewBox="0 0 620 620" role="img" aria-label="2D embedding plane with draggable query vector"></svg>
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="card-head" style="border-top:1px solid var(--line-soft);border-bottom:none;">
+          <div class="readout" id="readout"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="col">
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Ranked results</div>
+          <div class="card-title" id="rankMode" style="color:var(--query);letter-spacing:.08em;"></div>
+        </div>
+        <div class="card-body">
+          <div class="rank-list" id="rankList"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Live math &mdash; top match</div>
+        </div>
+        <div class="card-body">
+          <div class="target" id="mathTarget"></div>
+          <div class="math" id="math"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">When to use this metric</div>
+        </div>
+        <div class="card-body">
+          <p class="info-when" id="infoWhen"></p>
+          <div class="usedby"><span class="tag">Used by</span><span id="usedBy"></span></div>
+          <div class="note" id="infoNote"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span>Toy 2&#8209;D embeddings, hand&#8209;placed for intuition. Real embeddings live in 768&ndash;3072 dimensions &mdash; the math is identical.</span>
+    <span><code>vector-search-demo.html</code> &middot; vanilla JS, zero dependencies</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ------------------------------------------------------------------
+     DATA — hand-crafted 2D embeddings.
+     x axis  ≈  frontend/UI (−)  ...  data & backend (+)
+     y axis  ≈  infrastructure (−)  ...  ML / modelling (+)
+  ------------------------------------------------------------------ */
+  const CATS = {
+    lang:  { label:"Languages",      color:"#60a5fa" },
+    ml:    { label:"ML / AI",        color:"#c084fc" },
+    front: { label:"Frontend",       color:"#4ade80" },
+    infra: { label:"Infra / DevOps", color:"#fbbf24" },
+    data:  { label:"Data / Stores",  color:"#2dd4bf" }
+  };
+
+  const SKILLS = [
+    { n:"Python",       c:"lang",  v:[ 0.30,  0.56] },
+    { n:"JavaScript",   c:"lang",  v:[-0.52,  0.30] },
+    { n:"TypeScript",   c:"lang",  v:[-0.58,  0.12], lp:"left" },
+    { n:"SQL",          c:"lang",  v:[ 0.68,  0.14] },
+    { n:"Go",           c:"lang",  v:[ 0.46, -0.52], lp:"right" },
+    { n:"Rust",         c:"lang",  v:[ 0.30, -0.68] },
+
+    { n:"PyTorch",      c:"ml",    v:[ 0.34,  0.92] },
+    { n:"TensorFlow",   c:"ml",    v:[ 0.52,  0.80] },
+    { n:"scikit-learn", c:"ml",    v:[ 0.12,  0.76], lp:"left" },
+    { n:"Pandas",       c:"ml",    v:[ 0.46,  0.44], lp:"right" },
+
+    { n:"React",        c:"front", v:[-0.84,  0.46] },
+    { n:"Vue",          c:"front", v:[-0.92,  0.30], lp:"left" },
+    { n:"Tailwind",     c:"front", v:[-0.76, -0.12], lp:"left" },
+
+    { n:"Docker",       c:"infra", v:[-0.04, -0.86], lp:"left" },
+    { n:"Kubernetes",   c:"infra", v:[ 0.14, -0.96] },
+    { n:"Terraform",    c:"infra", v:[-0.26, -0.70], lp:"left" },
+    { n:"AWS",          c:"infra", v:[ 0.40, -0.80], lp:"right" },
+
+    { n:"PostgreSQL",   c:"data",  v:[ 0.88,  0.00], lp:"right" },
+    { n:"Redis",        c:"data",  v:[ 0.80, -0.30], lp:"right" },
+    { n:"pgvector",     c:"data",  v:[ 0.78,  0.42], lp:"right" }
+  ];
+
+  /* ------------------------------------------------------------------
+     VOCAB — the toy "embedding model" for free-text queries.
+     Every skill name is a term, plus concept terms placed in the same
+     2-D space. A query is embedded by averaging the vectors of the
+     terms it contains (bag-of-words) — the same idea real encoders
+     implement with a neural net in 768+ dimensions.
+  ------------------------------------------------------------------ */
+  const VOCAB = {
+    "machine learning":[0.34,0.86], "deep learning":[0.36,0.92], "neural network":[0.36,0.92],
+    "neural":[0.36,0.90], "ml":[0.34,0.86], "ai":[0.36,0.88], "model":[0.38,0.84],
+    "training":[0.40,0.86], "inference":[0.42,0.78], "llm":[0.40,0.88],
+
+    "data science":[0.40,0.62], "analytics":[0.52,0.40], "dataframe":[0.46,0.44],
+    "etl":[0.60,0.30], "pipeline":[0.50,0.20],
+
+    "database":[0.84,0.04], "db":[0.84,0.04], "storage":[0.80,-0.10],
+    "cache":[0.80,-0.30], "caching":[0.80,-0.30], "query language":[0.68,0.14],
+    "vector search":[0.78,0.42], "embeddings":[0.78,0.44], "semantic search":[0.74,0.46],
+    "rag":[0.76,0.44], "similarity":[0.76,0.44],
+
+    "frontend":[-0.84,0.34], "front end":[-0.84,0.34], "ui":[-0.84,0.30],
+    "user interface":[-0.84,0.30], "web":[-0.72,0.34], "browser":[-0.70,0.32],
+    "css":[-0.78,-0.08], "styling":[-0.78,-0.10], "component":[-0.86,0.42],
+    "components":[-0.86,0.42], "spa":[-0.86,0.40],
+
+    "backend":[0.46,-0.18], "server":[0.44,-0.30], "api":[0.40,-0.10],
+    "microservice":[0.30,-0.50], "microservices":[0.30,-0.50],
+
+    "infrastructure":[0.06,-0.82], "devops":[0.08,-0.84], "deployment":[0.04,-0.80],
+    "deploy":[0.04,-0.80], "cloud":[0.38,-0.80], "container":[-0.02,-0.86],
+    "containers":[-0.02,-0.86], "orchestration":[0.14,-0.94], "cluster":[0.14,-0.92],
+    "ci cd":[0.02,-0.78], "scaling":[0.20,-0.86],
+
+    "systems programming":[0.34,-0.64], "systems":[0.34,-0.62], "low level":[0.32,-0.68],
+    "performance":[0.38,-0.58], "concurrency":[0.46,-0.54], "memory safety":[0.30,-0.70],
+    "compiled":[0.38,-0.60], "scripting":[0.26,0.52], "types":[-0.58,0.12],
+    "typed":[-0.58,0.12]
+  };
+  // every skill name is also a vocabulary term
+  SKILLS.forEach(s => { VOCAB[s.n.toLowerCase()] = s.v; });
+
+  const METRICS = {
+    euclidean:{
+      name:"Euclidean",
+      short:"lowest distance wins",
+      better:"lower",
+      formula:"√(Δ₁² + Δ₂²)",
+      unit:"distance",
+      when:"Use when <b>magnitude matters</b> &mdash; raw position in space. Two vectors pointing the same direction but very different lengths are <i>far apart</i> here. Good for physical coordinates, usage-frequency counts, or any feature where &ldquo;how much&rdquo; is part of the meaning.",
+      usedBy:["FAISS L2","Milvus L2","scikit-learn KNN","image dedup"],
+      note:"Also called L2 distance. Note: on length-normalised vectors, Euclidean and cosine produce the *same ranking* — which is why many ANN indexes normalise first and then use L2."
+    },
+    cosine:{
+      name:"Cosine",
+      short:"highest similarity wins",
+      better:"higher",
+      formula:"q·p / (‖q‖‖p‖)",
+      unit:"similarity",
+      when:"Use when <b>only direction matters</b> &mdash; the angle between vectors, not their length. A short document and a long document about the same topic score nearly identically. This is the default for <b>semantic search, RAG and NLP embeddings</b>.",
+      usedBy:["OpenAI embeddings","Pinecone","pgvector <=>","Weaviate","Chroma"],
+      note:"Range is −1 to 1. Drag the query far from the origin: the cosine score barely changes, because scaling a vector never changes its angle."
+    },
+    dot:{
+      name:"Dot Product",
+      short:"highest score wins",
+      better:"higher",
+      formula:"q₁p₁ + q₂p₂",
+      unit:"score",
+      when:"Use when <b>both magnitude and direction matter</b>. Long vectors get boosted, so popularity or confidence can be baked straight into the embedding length. Standard in <b>recommendation and ranking</b> systems.",
+      usedBy:["two-tower recsys","Matrix factorization","FAISS IP","MIPS indexes"],
+      note:"Unbounded, and biased toward long vectors — an item can win purely by having a big magnitude, even at a worse angle. That is a feature for recsys and a bug for semantic search."
+    }
+  };
+
+  /* ---------------- plane <-> screen ---------------- */
+  const SIZE = 620, PAD = 46, DOM = 1.18;
+  const toX = x => PAD + ((x + DOM) / (2*DOM)) * (SIZE - 2*PAD);
+  const toY = y => PAD + ((DOM - y) / (2*DOM)) * (SIZE - 2*PAD);
+  const fromX = px => ((px - PAD) / (SIZE - 2*PAD)) * 2*DOM - DOM;
+  const fromY = py => DOM - ((py - PAD) / (SIZE - 2*PAD)) * 2*DOM;
+
+  /* ---------------- state ---------------- */
+  let metric     = "cosine";
+  let query      = [-0.14, 0.34];
+  let activeCats = new Set(Object.keys(CATS));   // category filter — all on by default
+  let tweenId    = null;                          // in-flight query animation
+  let tweenFallback = null;                       // guarantees the tween's final state
+
+  /* Embed free text -> vector. Returns null when nothing matched. */
+  function embedText(text){
+    const t = " " + String(text).toLowerCase().replace(/[^a-z0-9+#. ]+/g," ") + " ";
+    const hits = Object.keys(VOCAB).filter(k =>
+      new RegExp("(^|[^a-z0-9])" + k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + "([^a-z0-9]|$)").test(t)
+    );
+    if(!hits.length) return null;
+    // drop short terms swallowed by a longer match ("learning" inside "deep learning")
+    const terms = hits.filter(k => !hits.some(o => o !== k && o.includes(k)));
+    const sum = terms.reduce((a,k)=>[a[0]+VOCAB[k][0], a[1]+VOCAB[k][1]], [0,0]);
+    return { terms, vec:[ +(sum[0]/terms.length).toFixed(3), +(sum[1]/terms.length).toFixed(3) ] };
+  }
+
+  /* Animate the query vector to a target so rank changes are visible.
+     rAF is throttled/paused in background tabs, so a timer guarantees the
+     final state always lands — the animation is decoration, not the source
+     of truth. */
+  function moveQueryTo(target, ms){
+    stopTween();
+    const from = query.slice(), t0 = performance.now();
+    const finish = ()=>{ stopTween(); query = target.slice(); update(); };
+    tweenFallback = setTimeout(finish, ms + 120);
+    (function step(now){
+      const k = Math.min(1, (now - t0) / ms);
+      if(k >= 1) return finish();
+      const e = 1 - Math.pow(1 - k, 3);           // ease-out cubic
+      query = [ +(from[0] + (target[0]-from[0])*e).toFixed(3),
+                +(from[1] + (target[1]-from[1])*e).toFixed(3) ];
+      update();
+      tweenId = requestAnimationFrame(step);
+    })(performance.now());
+  }
+  function stopTween(){
+    if(tweenId) cancelAnimationFrame(tweenId);
+    clearTimeout(tweenFallback);
+    tweenId = null; tweenFallback = null;
+  }
+
+  const svg      = document.getElementById("plot");
+  const rankList = document.getElementById("rankList");
+  const mathEl   = document.getElementById("math");
+  const mathTgt  = document.getElementById("mathTarget");
+  const readout  = document.getElementById("readout");
+  const rankMode = document.getElementById("rankMode");
+  const SVGNS    = "http://www.w3.org/2000/svg";
+
+  function el(tag, attrs){
+    const n = document.createElementNS(SVGNS, tag);
+    for(const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  /* ---------------- static plot chrome ---------------- */
+  const defs = el("defs");
+  defs.innerHTML =
+    '<radialGradient id="qGlow"><stop offset="0%" stop-color="#ff6b2c" stop-opacity=".55"/>'+
+    '<stop offset="100%" stop-color="#ff6b2c" stop-opacity="0"/></radialGradient>'+
+    '<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">'+
+    '<path d="M 0 0 L 10 5 L 0 10 z" fill="#ff6b2c"/></marker>';
+  svg.appendChild(defs);
+
+  const gGrid = el("g", {}), gRays = el("g", {}), gLink = el("g", {}),
+        gPts  = el("g", {}), gQuery = el("g", {});
+  svg.append(gGrid, gRays, gLink, gPts, gQuery);
+
+  // grid
+  for(let i=-1; i<=1; i+=0.25){
+    const v = +i.toFixed(2);
+    if(Math.abs(v) < 1e-9) continue;
+    gGrid.appendChild(el("line",{x1:toX(v),y1:PAD,x2:toX(v),y2:SIZE-PAD,stroke:"#161d2a","stroke-width":1}));
+    gGrid.appendChild(el("line",{x1:PAD,y1:toY(v),x2:SIZE-PAD,y2:toY(v),stroke:"#161d2a","stroke-width":1}));
+  }
+  // unit circle (reference for cosine)
+  gGrid.appendChild(el("circle",{cx:toX(0),cy:toY(0),r:(SIZE-2*PAD)/(2*DOM)/2,
+    fill:"none",stroke:"#273144","stroke-dasharray":"3 5"}));
+  // axes
+  gGrid.appendChild(el("line",{x1:PAD,y1:toY(0),x2:SIZE-PAD,y2:toY(0),stroke:"#2c3850","stroke-width":1.3}));
+  gGrid.appendChild(el("line",{x1:toX(0),y1:PAD,x2:toX(0),y2:SIZE-PAD,stroke:"#2c3850","stroke-width":1.3}));
+
+  function axisLabel(x,y,text,anchor){
+    const t = el("text",{x:x,y:y,class:"ax",fill:"#4a5568","font-size":10.5,"font-family":"JetBrains Mono, monospace","text-anchor":anchor||"middle"});
+    t.textContent = text; gGrid.appendChild(t);
+  }
+  axisLabel(SIZE-PAD, toY(0)-9, "dim 1  →  data / backend", "end");
+  axisLabel(toX(0)+9, PAD+2, "dim 2  →  ML / modelling", "start");
+  axisLabel(toX(0)-7, toY(0)+14, "origin", "end");
+
+  /* ---------------- skill points ---------------- */
+  SKILLS.forEach(s=>{
+    const col = CATS[s.c].color;
+    const cx = toX(s.v[0]), cy = toY(s.v[1]);
+    s._ray = el("line",{x1:toX(0),y1:toY(0),x2:cx,y2:cy,stroke:col,"stroke-width":1,"stroke-dasharray":"2 4",opacity:0});
+    gRays.appendChild(s._ray);
+
+    const g = el("g",{});
+    s._g = g;
+    g.style.transition = "opacity .25s ease";
+    s._halo = el("circle",{cx:cx,cy:cy,r:11,fill:col,opacity:0});
+    g.appendChild(s._halo);
+    g.appendChild(el("circle",{cx:cx,cy:cy,r:4.6,fill:col,stroke:"#07090f","stroke-width":1.6}));
+
+    const right = s.lp === "right", left = s.lp === "left";
+    const t = el("text",{
+      x: cx + (right? 10 : left? -10 : 0),
+      y: cy + (right||left ? 3.6 : -11),
+      class:"sl",
+      fill:"#c3cedf","font-size":11.5,"font-weight":500,
+      "font-family":"Inter, sans-serif",
+      "text-anchor": right? "start" : left? "end" : "middle"
+    });
+    t.textContent = s.n;
+    s._label = t;
+    g.appendChild(t);
+    gPts.appendChild(g);
+  });
+
+  /* ---------------- query vector ---------------- */
+  const qGlow = el("circle",{r:34,fill:"url(#qGlow)"});
+  const qArrow= el("line",{x1:toX(0),y1:toY(0),stroke:"#ff6b2c","stroke-width":2,
+                           "marker-end":"url(#arrow)",opacity:.85});
+  const qRing = el("circle",{r:13,fill:"none",stroke:"#ff6b2c","stroke-width":1.4,opacity:.55});
+  const qDot  = el("circle",{r:7.5,fill:"#ff6b2c",stroke:"#07090f","stroke-width":2});
+  const qTxt  = el("text",{class:"ql",fill:"#ff9a63","font-size":11.5,"font-weight":700,
+                           "font-family":"JetBrains Mono, monospace","text-anchor":"middle"});
+  qTxt.textContent = "query";
+  gQuery.append(qGlow, qArrow, qRing, qDot, qTxt);
+
+  const linkLine = el("line",{stroke:"#ff6b2c","stroke-width":1.6,"stroke-dasharray":"5 4",opacity:.8});
+  const linkTxt  = el("text",{class:"ql",fill:"#ffb183","font-size":10.5,"font-weight":600,
+                              "font-family":"JetBrains Mono, monospace","text-anchor":"middle"});
+  gLink.append(linkLine, linkTxt);
+
+  /* ---------------- legend ---------------- */
+  const legendEl = document.getElementById("legend");
+  legendEl.innerHTML =
+    Object.entries(CATS).map(([k,c]) =>
+      `<button class="lg" type="button" data-cat="${k}" aria-pressed="true" style="color:${c.color}">`+
+      `<i style="background:${c.color}"></i><span style="color:var(--text-dim)">${c.label}</span></button>`
+    ).join("")
+    + `<span class="lg"><i style="background:var(--query)"></i>Query vector</span>`
+    + `<span class="hint">click a category to filter</span>`;
+
+  legendEl.addEventListener("click", ev=>{
+    const btn = ev.target.closest("button.lg");
+    if(!btn) return;
+    const cat = btn.dataset.cat;
+    if(activeCats.has(cat)) activeCats.delete(cat); else activeCats.add(cat);
+    // never leave the index empty — clearing the last one restores all
+    if(activeCats.size === 0) activeCats = new Set(Object.keys(CATS));
+    legendEl.querySelectorAll("button.lg").forEach(b =>
+      b.setAttribute("aria-pressed", String(activeCats.has(b.dataset.cat))));
+    update();
+  });
+
+  /* ---------------- math helpers ---------------- */
+  const f = (n, d) => n.toFixed(d===undefined?3:d);
+  const sg = n => (n<0 ? `(${f(n,2)})` : f(n,2));
+  const dot  = (a,b) => a[0]*b[0] + a[1]*b[1];
+  const mag  = a => Math.hypot(a[0], a[1]);
+
+  function score(q,p){
+    if(metric === "euclidean") return Math.hypot(q[0]-p[0], q[1]-p[1]);
+    if(metric === "dot")       return dot(q,p);
+    const m = mag(q)*mag(p);
+    return m === 0 ? 0 : dot(q,p)/m;
+  }
+
+  /* ---------------- ranked table (FLIP animated) ---------------- */
+  const rowEls = new Map();
+
+  function buildRow(s){
+    const d = document.createElement("div");
+    d.className = "row";
+    d.innerHTML =
+      `<div class="rank"></div>`+
+      `<div class="name"><i style="background:${CATS[s.c].color}"></i><span>${s.n}</span></div>`+
+      `<div class="score"></div>`+
+      `<div class="bar"><i style="width:0%"></i></div>`;
+    d._rank  = d.querySelector(".rank");
+    d._score = d.querySelector(".score");
+    d._bar   = d.querySelector(".bar > i");
+    rowEls.set(s.n, d);
+    return d;
+  }
+
+  function renderRanks(ranked){
+    const top = ranked.slice(0,8);
+
+    // 1. FIRST — record current geometry
+    const first = new Map();
+    rowEls.forEach((node,name)=>{
+      if(node.isConnected) first.set(name, node.getBoundingClientRect().top);
+    });
+
+    // 2. mutate DOM
+    const lo = Math.min(...top.map(r=>r.s)), hi = Math.max(...top.map(r=>r.s));
+    const span = (hi - lo) || 1;
+    top.forEach((r,i)=>{
+      const node = rowEls.get(r.skill.n) || buildRow(r.skill);
+      node._rank.textContent  = "#" + (i+1);
+      node._score.textContent = f(r.s);
+      const norm = METRICS[metric].better === "lower" ? (hi - r.s)/span : (r.s - lo)/span;
+      node._bar.style.width = (8 + norm*92) + "%";
+      node.classList.toggle("top", i===0);
+      rankList.appendChild(node);                      // reorder
+    });
+    rowEls.forEach((node,name)=>{
+      if(!top.some(r=>r.skill.n === name) && node.isConnected) node.remove();
+    });
+
+    // 3. LAST + INVERT + PLAY
+    rowEls.forEach((node,name)=>{
+      if(!node.isConnected) return;
+      const from = first.get(name);
+      if(from === undefined) return;
+      const dy = from - node.getBoundingClientRect().top;
+      if(Math.abs(dy) < 0.5) return;
+      node.style.transition = "none";
+      node.style.transform  = `translateY(${dy}px)`;
+      requestAnimationFrame(()=>{
+        node.style.transition = "transform .36s cubic-bezier(.22,.8,.26,1)";
+        node.style.transform  = "translateY(0)";
+      });
+    });
+  }
+
+  /* ---------------- live math panel ---------------- */
+  function renderMath(best){
+    const p = best.skill.v, q = query;
+    const M = METRICS[metric];
+
+    mathTgt.innerHTML =
+      `<span>#1 match</span><span class="chip"><i style="width:7px;height:7px;border-radius:50%;background:${CATS[best.skill.c].color};display:inline-block"></i>${best.skill.n}</span>`+
+      `<span style="font-family:'JetBrains Mono',monospace;color:var(--text-faint)">p = [${f(p[0],2)}, ${f(p[1],2)}] &nbsp;·&nbsp; q = [${f(q[0],2)}, ${f(q[1],2)}]</span>`;
+
+    const L = [];
+    if(metric === "euclidean"){
+      const d1 = q[0]-p[0], d2 = q[1]-p[1];
+      L.push(`<span class="form">d(q,p) = √( (q₁−p₁)² + (q₂−p₂)² )</span>`);
+      L.push(`<span class="op">       = √( (</span><span class="q">${f(q[0],2)}</span><span class="op"> − </span><span class="num">${sg(p[0])}</span><span class="op">)² + (</span><span class="q">${f(q[1],2)}</span><span class="op"> − </span><span class="num">${sg(p[1])}</span><span class="op">)² )</span>`);
+      L.push(`<span class="op">       = √( (</span><span class="num">${f(d1,3)}</span><span class="op">)² + (</span><span class="num">${f(d2,3)}</span><span class="op">)² )</span>`);
+      L.push(`<span class="op">       = √( </span><span class="num">${f(d1*d1,4)}</span><span class="op"> + </span><span class="num">${f(d2*d2,4)}</span><span class="op"> )  = √ </span><span class="num">${f(d1*d1+d2*d2,4)}</span>`);
+      L.push(`<span class="op">       = </span><span class="res">${f(best.s,4)}</span>   <span class="lbl">← lower is closer</span>`);
+    } else if(metric === "dot"){
+      const t1 = q[0]*p[0], t2 = q[1]*p[1];
+      L.push(`<span class="form">q · p  = q₁p₁ + q₂p₂</span>`);
+      L.push(`<span class="op">       = (</span><span class="q">${f(q[0],2)}</span><span class="op">)(</span><span class="num">${f(p[0],2)}</span><span class="op">) + (</span><span class="q">${f(q[1],2)}</span><span class="op">)(</span><span class="num">${f(p[1],2)}</span><span class="op">)</span>`);
+      L.push(`<span class="op">       = </span><span class="num">${f(t1,4)}</span><span class="op"> + </span><span class="num">${f(t2,4)}</span>`);
+      L.push(`<span class="op">       = </span><span class="res">${f(best.s,4)}</span>   <span class="lbl">← higher scores better</span>`);
+      L.push(`<span class="lbl">‖q‖ = ${f(mag(q),3)}   ‖p‖ = ${f(mag(p),3)}   (length inflates this score)</span>`);
+    } else {
+      const dp = dot(q,p), mq = mag(q), mp = mag(p);
+      const cs = best.s, ang = Math.acos(Math.max(-1,Math.min(1,cs)))*180/Math.PI;
+      L.push(`<span class="form">cos(θ) = (q · p) / ( ‖q‖ × ‖p‖ )</span>`);
+      L.push(`<span class="lbl">q · p  = </span><span class="op">(</span><span class="q">${f(q[0],2)}</span><span class="op">)(</span><span class="num">${f(p[0],2)}</span><span class="op">) + (</span><span class="q">${f(q[1],2)}</span><span class="op">)(</span><span class="num">${f(p[1],2)}</span><span class="op">) = </span><span class="num">${f(dp,4)}</span>`);
+      L.push(`<span class="lbl">‖q‖    = </span><span class="op">√(</span><span class="q">${f(q[0],2)}</span><span class="op">² + </span><span class="q">${f(q[1],2)}</span><span class="op">²) = </span><span class="num">${f(mq,4)}</span>`);
+      L.push(`<span class="lbl">‖p‖    = </span><span class="op">√(</span><span class="num">${f(p[0],2)}</span><span class="op">² + </span><span class="num">${f(p[1],2)}</span><span class="op">²) = </span><span class="num">${f(mp,4)}</span>`);
+      L.push(`<span class="op">       = </span><span class="num">${f(dp,4)}</span><span class="op"> / (</span><span class="num">${f(mq,4)}</span><span class="op"> × </span><span class="num">${f(mp,4)}</span><span class="op">)</span>`);
+      L.push(`<span class="op">       = </span><span class="res">${f(cs,4)}</span>   <span class="lbl">← θ ≈ ${f(ang,1)}°</span>`);
+    }
+    mathEl.innerHTML = L.join("\n");
+  }
+
+  /* ---------------- info panel ---------------- */
+  function renderInfo(){
+    const M = METRICS[metric];
+    document.getElementById("infoWhen").innerHTML = M.when;
+    document.getElementById("usedBy").innerHTML = M.usedBy.map(u=>`<span class="pill">${u}</span>`).join(" ");
+    document.getElementById("infoNote").textContent = M.note;
+    rankMode.textContent = M.name + " · " + M.short;
+  }
+
+  /* ---------------- main update ---------------- */
+  function update(){
+    const M = METRICS[metric];
+    const ranked = SKILLS
+      .filter(s => activeCats.has(s.c))                  // ← search/category filter
+      .map(s => ({ skill:s, s:score(query, s.v) }))
+      .sort((a,b) => M.better === "lower" ? a.s - b.s : b.s - a.s);
+
+    const best = ranked[0];
+    const bestSet = new Set(ranked.slice(0,3).map(r=>r.skill.n));
+    const showRays = metric !== "euclidean";
+
+    SKILLS.forEach(s=>{
+      const inIndex = activeCats.has(s.c);
+      s._g.setAttribute("opacity", inIndex ? 1 : 0.14);
+      const isTop = inIndex && bestSet.has(s.n);
+      s._halo.setAttribute("opacity", s.n === best.skill.n ? .3 : isTop ? .14 : 0);
+      s._label.setAttribute("fill", s.n === best.skill.n ? "#ffffff" : isTop ? "#dbe4f0" : "#8c99ad");
+      s._label.setAttribute("font-weight", isTop ? 700 : 500);
+      s._ray.setAttribute("opacity", showRays && isTop ? .5 : 0);
+    });
+
+    // query glyph
+    const qx = toX(query[0]), qy = toY(query[1]);
+    qGlow.setAttribute("cx",qx); qGlow.setAttribute("cy",qy);
+    qDot.setAttribute("cx",qx);  qDot.setAttribute("cy",qy);
+    qRing.setAttribute("cx",qx); qRing.setAttribute("cy",qy);
+    qTxt.setAttribute("x",qx);   qTxt.setAttribute("y",qy + 25);
+    qArrow.setAttribute("x2",qx); qArrow.setAttribute("y2",qy);
+    qArrow.setAttribute("opacity", showRays ? .85 : .22);
+
+    // link to #1
+    const bx = toX(best.skill.v[0]), by = toY(best.skill.v[1]);
+    linkLine.setAttribute("x1",qx); linkLine.setAttribute("y1",qy);
+    linkLine.setAttribute("x2",bx); linkLine.setAttribute("y2",by);
+    linkTxt.setAttribute("x", qx + (bx-qx)*0.55);
+    linkTxt.setAttribute("y", qy + (by-qy)*0.55 - 7);
+    linkTxt.textContent = f(best.s,3);
+
+    readout.innerHTML =
+      `q = <b>[${f(query[0],2)}, ${f(query[1],2)}]</b>`+
+      `<span>‖q‖ = <b>${f(mag(query),3)}</b></span>`+
+      `<span>metric = <b>${M.name}</b> (${M.unit})</span>`+
+      `<span>top&#8209;1 = <b>${best.skill.n}</b></span>`;
+
+    renderRanks(ranked);
+    renderMath(best);
+  }
+
+  /* ---------------- drag / tap ---------------- */
+  let dragging = false;
+  function pointToPlane(ev){
+    const r = svg.getBoundingClientRect();
+    const px = ((ev.clientX - r.left) / r.width)  * SIZE;
+    const py = ((ev.clientY - r.top)  / r.height) * SIZE;
+    const cl = n => Math.max(-DOM*0.97, Math.min(DOM*0.97, n));
+    return [ +cl(fromX(px)).toFixed(3), +cl(fromY(py)).toFixed(3) ];
+  }
+  svg.addEventListener("pointerdown", ev=>{
+    stopTween();                                   // drag overrides any search animation
+    dragging = true;
+    svg.setPointerCapture(ev.pointerId);
+    query = pointToPlane(ev);
+    update();
+  });
+  svg.addEventListener("pointermove", ev=>{
+    if(!dragging) return;
+    ev.preventDefault();
+    query = pointToPlane(ev);
+    update();
+  });
+  const stop = ev => { dragging = false; try{ svg.releasePointerCapture(ev.pointerId); }catch(e){} };
+  svg.addEventListener("pointerup", stop);
+  svg.addEventListener("pointercancel", stop);
+
+  /* keyboard nudge for accessibility */
+  svg.setAttribute("tabindex","0");
+  svg.addEventListener("keydown", ev=>{
+    const step = ev.shiftKey ? 0.12 : 0.03;
+    const map = {ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,step],ArrowDown:[0,-step]};
+    const d = map[ev.key];
+    if(!d) return;
+    ev.preventDefault();
+    query = [ Math.max(-1.14,Math.min(1.14, +(query[0]+d[0]).toFixed(3))),
+              Math.max(-1.14,Math.min(1.14, +(query[1]+d[1]).toFixed(3))) ];
+    update();
+  });
+
+  /* ---------------- metric buttons ---------------- */
+  document.querySelectorAll(".mbtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      metric = btn.dataset.metric;
+      document.querySelectorAll(".mbtn").forEach(b=>
+        b.setAttribute("aria-pressed", String(b === btn)));
+      renderInfo();
+      update();
+    });
+  });
+
+  /* ---------------- search ---------------- */
+  const searchInput = document.getElementById("searchInput");
+  const searchClear = document.getElementById("searchClear");
+  const embedNote   = document.getElementById("embedNote");
+  let   searchTimer = null;
+
+  function runSearch(text, animate){
+    const raw = text.trim();
+    searchClear.classList.toggle("on", raw.length > 0);
+
+    if(!raw){
+      embedNote.innerHTML = `<span style="color:#55617a">Type a query, or drag the vector directly. Both set the same <b>q</b>.</span>`;
+      return;
+    }
+    const emb = embedText(raw);
+    if(!emb){
+      embedNote.innerHTML = `<span class="miss">no vocabulary term matched</span> — the query vector stays put. Try a tech concept, e.g. “caching” or “deep learning”.`;
+      return;
+    }
+    embedNote.innerHTML =
+      `embed(<b>"${raw.replace(/[<>&]/g,"")}"</b>) → matched `+
+      emb.terms.map(t=>`<span class="term">${t}</span>`).join(" ")+
+      ` → q = <b>[${f(emb.vec[0],2)}, ${f(emb.vec[1],2)}]</b>`+
+      (emb.terms.length > 1 ? `  <span style="color:#55617a">(mean of ${emb.terms.length} term vectors)</span>` : ``);
+
+    if(animate) moveQueryTo(emb.vec, 620);
+    else { query = emb.vec.slice(); update(); }
+  }
+
+  searchInput.addEventListener("input", ()=>{
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(()=>runSearch(searchInput.value, true), 180);
+  });
+  searchInput.addEventListener("keydown", ev=>{
+    if(ev.key === "Enter"){ clearTimeout(searchTimer); runSearch(searchInput.value, true); }
+  });
+  searchClear.addEventListener("click", ()=>{
+    searchInput.value = "";
+    runSearch("", false);
+    searchInput.focus();
+  });
+  document.querySelectorAll(".ex").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      searchInput.value = b.dataset.q;
+      runSearch(b.dataset.q, true);
+    });
+  });
+
+  renderInfo();
+  runSearch("", false);
+  update();
+})();
+</script>
+</body>
+</html>
